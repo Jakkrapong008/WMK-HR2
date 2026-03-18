@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสารสนเทศการไปราชการ โรงเรียนวัดแม่กะ</title>
+    
+    <!-- Fonts: Sarabun -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sarabun: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        schoolRed: '#B91C1C', // สีแดงโรงเรียน
+                        schoolYellow: '#FACC15', // สีเหลืองโรงเรียน
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FullCalendar & SweetAlert2 -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .fc-toolbar-title { font-size: 1.25rem !important; font-weight: 600 !important; }
+        .fc-event { cursor: pointer; transition: transform 0.2s; border: none !important;}
+        .fc-event:hover { transform: scale(1.02); }
+        .fc-day-today { background-color: #fef08a !important; opacity: 0.5; } /* สีเหลืองอ่อนสำหรับวันนี้ */
+        
+        /* สีพื้นหลังวันหยุด */
+        .fc-day-sat { background-color: #f3e8ff !important; } /* สีม่วงอ่อน */
+        .fc-day-sun { background-color: #fee2e2 !important; } /* สีแดงพาสเทลอ่อน */
+        
+        /* Loading Overlay */
+        #loadingOverlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8); z-index: 9999;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #B91C1C;
+            border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="font-sarabun text-gray-800">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner mb-4"></div>
+        <p class="text-schoolRed font-semibold text-lg">กำลังประมวลผลข้อมูล...</p>
+    </div>
+
+    <!-- Header / Navbar -->
+    <header class="bg-schoolRed text-white shadow-lg border-b-4 border-schoolYellow sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center gap-4 mb-3 md:mb-0">
+                <img src="https://img2.pic.in.th/logob0b7643db577ceee.png" alt="Logo" class="w-14 h-14 bg-white rounded-full p-1 shadow-md">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold leading-tight text-schoolYellow">ระบบสารสนเทศการไปราชการ</h1>
+                    <p class="text-sm md:text-base text-gray-200">โรงเรียนวัดแม่กะ</p>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="flex bg-red-800 rounded-lg p-1">
+                <button onclick="switchTab('calendarTab')" id="btn-calendarTab" class="tab-btn active px-4 py-2 rounded-md font-medium text-sm md:text-base flex items-center gap-2 bg-schoolYellow text-schoolRed shadow transition-colors">
+                    <i class="ph ph-calendar-blank text-lg"></i> ปฏิทิน
+                </button>
+                <button onclick="switchTab('formTab')" id="btn-formTab" class="tab-btn px-4 py-2 rounded-md font-medium text-sm md:text-base flex items-center gap-2 text-white hover:bg-red-700 transition-colors">
+                    <i class="ph ph-note-pencil text-lg"></i> บันทึกข้อมูล
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6 max-w-5xl">
+        
+        <!-- Tab 1: Calendar View -->
+        <div id="calendarTab" class="tab-content block">
+            <div class="bg-white rounded-xl shadow-md p-4 md:p-6 border-t-4 border-schoolRed">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <i class="ph ph-calendar-check text-schoolRed text-2xl"></i> ตารางการไปราชการ
+                    </h2>
+                    
+                    <!-- Search/Filter -->
+                    <div class="w-full md:w-1/3 relative">
+                        <select id="nameFilter" onchange="filterCalendar()" class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed appearance-none bg-white">
+                            <option value="all">แสดงทุกคน</option>
+                            <!-- Options will be populated by JS -->
+                        </select>
+                        <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-gray-500 text-lg"></i>
+                    </div>
+                </div>
+
+                <!-- Legend (Colors) -->
+                <div id="colorLegend" class="flex flex-wrap gap-2 mb-4 text-xs">
+                    <!-- Legend generated by JS -->
+                </div>
+
+                <!-- Calendar Container -->
+                <div id="calendar" class="min-h-[500px]"></div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Form View -->
+        <div id="formTab" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-md p-4 md:p-8 max-w-2xl mx-auto border-t-4 border-schoolYellow">
+                <h2 class="text-2xl font-bold text-center text-schoolRed mb-6 flex justify-center items-center gap-2">
+                    <i class="ph ph-clipboard-text text-3xl"></i> บันทึกการไปราชการ
+                </h2>
+                
+                <form id="recordForm" onsubmit="submitForm(event)" class="space-y-5">
+                    
+                    <!-- Date Group (Added for calendar functionality) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">วันที่เริ่มต้น <span class="text-red-500">*</span></label>
+                            <input type="date" id="startDate" name="startDate" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">วันที่สิ้นสุด <span class="text-red-500">*</span></label>
+                            <input type="date" id="endDate" name="endDate" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อ-สกุล <span class="text-red-500">*</span></label>
+                        <select id="personName" name="name" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed">
+                            <option value="">-- เลือกชื่อ --</option>
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อกิจกรรม/เรื่องที่ไปราชการ <span class="text-red-500">*</span></label>
+                        <input type="text" id="activity" name="activity" required placeholder="เช่น อบรมหลักสูตร..." class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">รูปแบบ <span class="text-red-500">*</span></label>
+                        <div class="flex gap-4 mt-2">
+                            <label class="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 flex-1">
+                                <input type="radio" name="format" value="ออนไลน์" required class="text-schoolRed focus:ring-schoolRed h-4 w-4">
+                                <span>ออนไลน์ (Online)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 flex-1">
+                                <input type="radio" name="format" value="ออนไซต์" class="text-schoolRed focus:ring-schoolRed h-4 w-4">
+                                <span>ออนไซต์ (On-site)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">สถานที่ <span class="text-red-500">*</span></label>
+                        <input type="text" id="location" name="location" required placeholder="ระบุสถานที่ หรือ ลิงก์ห้องประชุม" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-schoolYellow focus:border-schoolRed">
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit" class="w-full bg-schoolRed hover:bg-red-800 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2 text-lg">
+                            <i class="ph ph-paper-plane-right"></i> บันทึกข้อมูล
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="text-center py-6 text-gray-500 text-sm mt-8">
+        &copy; 2026 ระบบสารสนเทศการไปราชการ โรงเรียนวัดแม่กะ
+    </footer>
+
+    <script>
+        // --- 1. CONFIGURATION ---
+        // ใส่ URL ของ Google Apps Script ของคุณที่นี่
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxRG5tVpXw-wYImYUN_xfFakdf7I2yKDlVAPNiqmAigLfMDA5P5xxTCBJXod87JaOleKQ/exec";
+        
+        // รายชื่อบุคลากรและสีประจำตัว (Hex Color)
+        const personnelData = [
+            { name: "นางสาวศิริยา อินทกาโมทย์", color: "#EF4444" }, // Red
+            { name: "นายจักรพงศ์ จันทวงศ์", color: "#F97316" }, // Orange
+            { name: "นางสาวศศิประภา ชมถิ่น", color: "#EAB308" }, // Yellow
+            { name: "นางณพิชญา นิติคุณชัย", color: "#84CC16" }, // Lime
+            { name: "นางสาวศิริณทิพย์ สุวรรณ์", color: "#22C55E" }, // Green
+            { name: "นางสาวจันทวี ทาเกิด", color: "#10B981" }, // Emerald
+            { name: "นายณัฐพงษ์ วิริยา", color: "#06B6D4" }, // Cyan
+            { name: "นายธนะกานต์ ภูมิมาลา", color: "#3B82F6" }, // Blue
+            { name: "นางสาวนฤมล กระจ่างโฉม", color: "#6366F1" }, // Indigo
+            { name: "นางสาวเยาวพา มาน้อย", color: "#A855F7" }, // Purple
+            { name: "นายพิสิษฐ์ ตั้งสกุล", color: "#D946EF" }, // Fuchsia
+            { name: "นายธนดล แดนคีรีราษฎร์", color: "#F43F5E" }, // Rose
+            { name: "นายสุรชัย ปองพรศักดิ์", color: "#475569" }  // Slate
+        ];
+
+        let calendar;
+        let allEventsData = [];
+
+        // --- 2. INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', function() {
+            populateSelects();
+            renderLegend();
+            initCalendar();
+            fetchDataForCalendar();
+        });
+
+        // --- 3. UI FUNCTIONS ---
+        function switchTab(tabId) {
+            // ซ่อนทุก tab
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            // แสดง tab ที่เลือก
+            document.getElementById(tabId).classList.remove('hidden');
+            
+            // อัปเดตสไตล์ปุ่ม
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-schoolYellow', 'text-schoolRed', 'shadow');
+                btn.classList.add('text-white', 'hover:bg-red-700');
+            });
+            
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('text-white', 'hover:bg-red-700');
+            activeBtn.classList.add('bg-schoolYellow', 'text-schoolRed', 'shadow');
+
+            // รีเฟรชปฏิทินหากเปิด tab ปฏิทิน
+            if(tabId === 'calendarTab' && calendar) {
+                setTimeout(() => calendar.render(), 100);
+            }
+        }
+
+        function populateSelects() {
+            const formSelect = document.getElementById('personName');
+            const filterSelect = document.getElementById('nameFilter');
+            
+            personnelData.forEach(person => {
+                // สำหรับฟอร์ม
+                const option1 = document.createElement('option');
+                option1.value = person.name;
+                option1.textContent = person.name;
+                formSelect.appendChild(option1);
+
+                // สำหรับตัวกรองค้นหา
+                const option2 = document.createElement('option');
+                option2.value = person.name;
+                option2.textContent = person.name;
+                filterSelect.appendChild(option2);
+            });
+        }
+
+        function renderLegend() {
+            const legendContainer = document.getElementById('colorLegend');
+            personnelData.forEach(person => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border';
+                item.innerHTML = `
+                    <div class="w-3 h-3 rounded-full" style="background-color: ${person.color};"></div>
+                    <span class="truncate max-w-[100px]" title="${person.name}">${person.name.split(' ')[0]}</span>
+                `;
+                legendContainer.appendChild(item);
+            });
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        function getColorForName(name) {
+            const person = personnelData.find(p => p.name === name);
+            return person ? person.color : '#6B7280'; // Default gray
+        }
+
+        // --- 4. CALENDAR LOGIC ---
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'th',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,listWeek'
+                },
+                buttonText: {
+                    today: 'วันนี้',
+                    month: 'เดือน',
+                    list: 'รายการ'
+                },
+                events: [],
+                eventClick: function(info) {
+                    // แสดงรายละเอียดเมื่อคลิกกิจกรรม
+                    const ev = info.event;
+                    
+                    // จัดการแสดงผลช่วงวันที่ (ลบ 1 วันจาก end date เนื่องจาก FullCalendar เผื่อวันไว้ 1 วัน)
+                    let endDateStr = ev.start.toLocaleDateString('th-TH');
+                    if (ev.end) {
+                        const actualEnd = new Date(ev.end.getTime() - 86400000);
+                        endDateStr = actualEnd.toLocaleDateString('th-TH');
+                    }
+
+                    let dateDisplay = ev.start.toLocaleDateString('th-TH');
+                    if (dateDisplay !== endDateStr) {
+                        dateDisplay += ' - ' + endDateStr;
+                    }
+
+                    Swal.fire({
+                        title: '<div class="text-xl font-bold text-schoolRed border-b-2 border-schoolYellow pb-2">รายละเอียดการไปราชการ</div>',
+                        html: `
+                            <div class="text-left space-y-3 text-base mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+                                <p><strong><i class="ph ph-user text-schoolRed text-lg"></i> ชื่อ-สกุล:</strong> ${ev.extendedProps.name}</p>
+                                <p><strong><i class="ph ph-clipboard-text text-schoolRed text-lg"></i> กิจกรรม:</strong> ${ev.extendedProps.activity}</p>
+                                <p><strong><i class="ph ph-desktop text-schoolRed text-lg"></i> รูปแบบ:</strong> ${ev.extendedProps.format}</p>
+                                <p><strong><i class="ph ph-map-pin text-schoolRed text-lg"></i> สถานที่:</strong> ${ev.extendedProps.location}</p>
+                                <p><strong><i class="ph ph-calendar text-schoolRed text-lg"></i> วันที่:</strong> ${dateDisplay}</p>
+                            </div>
+                        `,
+                        confirmButtonColor: '#B91C1C',
+                        confirmButtonText: '<i class="ph ph-x-circle"></i> ปิดหน้าต่าง'
+                    });
+                }
+            });
+            calendar.render();
+        }
+
+        function filterCalendar() {
+            const selectedName = document.getElementById('nameFilter').value;
+            
+            if (selectedName === 'all') {
+                calendar.removeAllEvents();
+                calendar.addEventSource(allEventsData);
+            } else {
+                const filteredData = allEventsData.filter(event => event.extendedProps.name === selectedName);
+                calendar.removeAllEvents();
+                calendar.addEventSource(filteredData);
+            }
+        }
+
+        // --- 5. DATA FETCHING & SUBMISSION ---
+        function fetchDataForCalendar() {
+            showLoading(true);
+            fetch(GAS_URL + "?action=getData")
+                .then(response => response.json())
+                .then(data => {
+                    // แปลงข้อมูลจาก Sheet เป็นรูปแบบที่ FullCalendar ต้องการ
+                    allEventsData = data.map(row => {
+                        // เพิ่มเวลาให้วันที่สิ้นสุดครอบคลุมทั้งวัน
+                        let end = new Date(row.endDate);
+                        end.setDate(end.getDate() + 1);
+
+                        return {
+                            title: row.name.split(' ')[0], // แสดงเฉพาะชื่อคนเท่านั้น
+                            start: row.startDate,
+                            end: end.toISOString().split('T')[0], // รูปแบบ YYYY-MM-DD
+                            backgroundColor: getColorForName(row.name),
+                            textColor: '#ffffff',
+                            allDay: true,
+                            extendedProps: {
+                                name: row.name,
+                                activity: row.activity, // เก็บข้อมูล activity ไว้ใช้แสดงใน popup
+                                format: row.format,
+                                location: row.location
+                            }
+                        };
+                    });
+                    
+                    calendar.removeAllEvents();
+                    calendar.addEventSource(allEventsData);
+                    filterCalendar(); // Apply filter if any
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    // ไม่แสดง error alert เพื่อไม่ให้รบกวนถ้ายกเลิกโหลด
+                })
+                .finally(() => {
+                    showLoading(false);
+            });
+        }
+
+        function submitForm(event) {
+            event.preventDefault();
+            
+            // ตรวจสอบวันที่
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (new Date(endDate) < new Date(startDate)) {
+                Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: 'วันที่สิ้นสุดต้องไม่น้อยกว่าวันที่เริ่มต้น' });
+                return;
+            }
+
+            const form = document.getElementById('recordForm');
+            const formData = new FormData(form);
+            
+            // แปลง FormData เป็น URLSearchParams สำหรับส่ง POST request ไปยัง GAS ได้ง่ายขึ้น
+            const urlEncodedData = new URLSearchParams();
+            for (const pair of formData.entries()) {
+                urlEncodedData.append(pair[0], pair[1]);
+            }
+            urlEncodedData.append("action", "saveData");
+
+            showLoading(true);
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: urlEncodedData,
+                // ไม่ต้องใส่ headers 'Content-Type': 'application/json' เพื่อหลีกเลี่ยง CORS Preflight
+            })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if(data.status === 'success') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'บันทึกข้อมูลสำเร็จ!',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        form.reset();
+                        fetchDataForCalendar(); // โหลดข้อมูลใหม่
+                        switchTab('calendarTab'); // กลับหน้าปฏิทิน
+                    });
+                } else {
+                    throw new Error(data.message || "เกิดข้อผิดพลาด");
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: 'ไม่สามารถบันทึกข้อมูลได้ โปรดลองอีกครั้ง' });
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
