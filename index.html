@@ -354,8 +354,16 @@
                         let end = new Date(row.endDate);
                         end.setDate(end.getDate() + 1);
 
+                        // กำหนด Emoji นำหน้าตามรูปแบบ
+                        let iconPrefix = '';
+                        if (row.format === 'ออนไลน์') {
+                            iconPrefix = '💻 ';
+                        } else if (row.format === 'ออนไซต์') {
+                            iconPrefix = '🚶 ';
+                        }
+
                         return {
-                            title: getShortName(row.name), // แสดงเฉพาะชื่อคน ตัดคำนำหน้าและนามสกุล
+                            title: iconPrefix + getShortName(row.name), // แสดง icon และชื่อคน
                             start: row.startDate,
                             end: end.toISOString().split('T')[0], // รูปแบบ YYYY-MM-DD
                             backgroundColor: getColorForName(row.name),
